@@ -40,4 +40,11 @@ double RangeDist(void);
 void Lander_Control(void);
 void Safety_Override(void);
 
+struct thruster_struct {
+  double angle_of_thruster_selected; // angle from the main thruster
+  double angle_from_current_thruster; // angle w.r.t to current working thruster
+  double max_thrust_acceleration;
+  void (*thruster_control)(double);
+} 
+
 #endif
