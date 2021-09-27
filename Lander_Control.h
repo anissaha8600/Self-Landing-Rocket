@@ -42,9 +42,28 @@ void Safety_Override(void);
 
 struct thruster_struct {
   double angle_of_thruster_selected; // angle from the main thruster
-  double angle_from_current_thruster; // angle w.r.t to current working thruster
   double max_thrust_acceleration;
-  void (*thruster_control)(double);
-} 
+  void (*set_thrust)(double);
+}; 
+
+struct pid_context_struct {
+  // weights for p.i.d TODO: needs fine-tuning
+  double k_p; 
+  double k_i; 
+  double k_d;
+  double arctan_strech_factor;
+  double intergal_sum;
+  double current_proportion;
+  bool valid_current_proportion;
+};
+
+double ANGLE_OFFEST_LIMIT = 90; // how much the thruster can tilt away from the default position
+
+
+inline double boundAngle(double theta) {
+  if (theta >= 360) return theta - 360;
+  if (theta < 0) return theta + 360;
+  return theta;
+}
 
 #endif

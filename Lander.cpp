@@ -160,35 +160,110 @@
 */
 #include <math.h>
 #include <stdio.h>
-#include <unistd.h>
-
+#include <iostream>
 
 #include "Lander_Control.h"
 
 struct thruster_struct thruster;
+bool ARE_PIDS_INITIALIZED = false;
+struct pid_context_struct x_pid;
+struct pid_context_struct y_pid;
+
+void reset_pid(struct pid_context_struct* pid) {
+  pid->current_proportion = 0;
+  pid->valid_current_proportion = false;
+  pid->intergal_sum = 0;
+}
+
+void initialize_pid(struct pid_context_struct* pid, double k_p, double k_i, double k_d, double arctan_strech_factor) {
+  pid->k_d = k_d;
+  pid->k_i = k_i;
+  pid->k_p = k_p;
+  pid->arctan_strech_factor = arctan_strech_factor;
+  reset_pid(pid);
+}
+
+double x_position_pid(double x_target) {
+  // TO-CHECK: we didnt add the time factor for intergal and derivative calculation (b/c its constant)
+  // we might need to add this in, in case something gets wonky
+
+  // proportional component
+  double proportion_error = PLAT_X - Position_X();
+  // intergral component
+  double integral_error = x_pid.intergal_sum + proportion_error;
+  x_pid.intergal_sum = integral_error;
+  // derivative component
+  double derivative_error;
+  if (x_pid.valid_current_proportion) {
+    derivative_error = x_pid.current_proportion - Position_X();
+  } else {
+    derivative_error = 0;
+  }
+  x_pid.current_proportion = Position_X();
+  x_pid.valid_current_proportion = true;
+
+  return (ANGLE_OFFEST_LIMIT / (PI/2))  * 
+    atan(1/x_pid.arctan_strech_factor * ((x_pid.k_p * proportion_error) + 
+                                         (x_pid.k_i * integral_error) + 
+                                         (x_pid.k_d * derivative_error)));
+}
+
+
 
 void select_thruster(void) {
   if (MT_OK) {
     thruster.max_thrust_acceleration = MT_ACCEL; //select main thruster
-    thruster.thruster_control = &Main_Thruster;
+    thruster.set_thrust = &Main_Thruster;
+    thruster.angle_of_thruster_selected = 0;
   } else if (LT_OK) {
     thruster.max_thrust_acceleration = LT_ACCEL; //select left thruster
-    thruster.thruster_control = &Left_Thruster;
+    thruster.set_thrust = &Left_Thruster;
+    thruster.angle_of_thruster_selected = 270;
   } else {
     thruster.max_thrust_acceleration = RT_ACCEL; //select right thruster
-    thruster.thruster_control = &Right_Thruster;
-  }
+    thruster.set_thrust = &Right_Thruster;
+    thruster.angle_of_thruster_selected = 90;
+  }  
 }
 
 void Mono_thruster(void) {
   // choose thruster thats working and bring that perpendicular to horizontal
   // function that initailizes all vars corresponding to thursters - stuff like default angle and function for choosing thruster
   select_thruster(); 
-  
+
     // function that brings rocket to some angle w.r.t to working thruster
   // come to zero velocity and on the x-dir and y-dir
-    // function to control x-velocity
-    // function to control y-velocity
+
+  // phase 1
+
+  double angle_offest = x_position_pid(PLAT_X);
+  std::cout << angle_offest << std::endl;
+  // TODO: put in its own function - angle computation + correction
+  double angle_target = boundAngle(angle_offest + thruster.angle_of_thruster_selected);
+  double angle_correction = boundAngle(Angle() - angle_target);
+
+  if (angle_correction > 1 && angle_correction < 359) {
+    if (angle_correction>=180) Rotate(360-angle_correction);
+    else Rotate(-angle_correction); 
+    return;
+  }
+
+    // determines engine thrust required to maintain ships desired y velocity
+  double THRUST_BOOST_UP = 0.2;
+  double THRUST_BOOST_DOWN = 0.2;
+  double thrust_angle = boundAngle(thruster.angle_of_thruster_selected - Angle());
+  if (Velocity_Y() > 0.1) {
+    thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))) - THRUST_BOOST_DOWN);
+  } 
+  else if (Velocity_Y() < -0.1) {
+    thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))) + THRUST_BOOST_UP);
+  } 
+  else {
+    thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))));
+  }
+
+  // function to control x-velocity
+  // function to control y-velocity
   
 }
 void Lander_Control(void)
@@ -242,6 +317,11 @@ void Lander_Control(void)
         ACCESS THE SIMULATION STATE. That's cheating,
         I'll give you zero.
 **************************************************/
+  if (!ARE_PIDS_INITIALIZED) {
+    initialize_pid(&x_pid, 5, 0, 10, 100); // TO CHECK: fine tune weights for x_pid here
+    initialize_pid(&y_pid, 1, 1, 1, 10000); // TO CHECK: fine tune weights for y_pid here
+    ARE_PIDS_INITIALIZED = true;
+  }
   Mono_thruster();
   return;
  double VXlim;
