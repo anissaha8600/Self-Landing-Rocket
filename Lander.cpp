@@ -190,17 +190,18 @@ double x_position_pid(double x_target) {
   // proportional component
   double proportion_error = PLAT_X - Position_X();
   // intergral component
-  double integral_error = x_pid.intergal_sum + proportion_error;
+  double integral_error = x_pid.intergal_sum + (proportion_error * T_STEP);
   x_pid.intergal_sum = integral_error;
   // derivative component
   double derivative_error;
   if (x_pid.valid_current_proportion) {
-    derivative_error = x_pid.current_proportion - Position_X();
+    derivative_error = (proportion_error - x_pid.current_proportion) / T_STEP;
   } else {
     derivative_error = 0;
   }
-  x_pid.current_proportion = Position_X();
+  x_pid.current_proportion = proportion_error;
   x_pid.valid_current_proportion = true;
+  std::cout << derivative_error << std::endl;
 
   return (ANGLE_OFFEST_LIMIT / (PI/2))  * 
     atan(1/x_pid.arctan_strech_factor * ((x_pid.k_p * proportion_error) + 
@@ -237,10 +238,13 @@ void Mono_thruster(void) {
   // phase 1
 
   double angle_offest = x_position_pid(PLAT_X);
-  std::cout << angle_offest << std::endl;
+  // std::cout << angle_offest << std::endl;
   // TODO: put in its own function - angle computation + correction
   double angle_target = boundAngle(angle_offest + thruster.angle_of_thruster_selected);
   double angle_correction = boundAngle(Angle() - angle_target);
+  double thrust_angle = boundAngle(thruster.angle_of_thruster_selected - Angle());
+
+  thruster.set_thrust((G_ACCEL / thruster.max_thrust_acceleration));
 
   if (angle_correction > 1 && angle_correction < 359) {
     if (angle_correction>=180) Rotate(360-angle_correction);
@@ -251,16 +255,16 @@ void Mono_thruster(void) {
     // determines engine thrust required to maintain ships desired y velocity
   double THRUST_BOOST_UP = 0.2;
   double THRUST_BOOST_DOWN = 0.2;
-  double thrust_angle = boundAngle(thruster.angle_of_thruster_selected - Angle());
-  if (Velocity_Y() > 0.1) {
-    thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))) - THRUST_BOOST_DOWN);
-  } 
-  else if (Velocity_Y() < -0.1) {
-    thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))) + THRUST_BOOST_UP);
-  } 
-  else {
-    thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))));
-  }
+  // if (Velocity_Y() > 0.1) {
+  //   thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))) - THRUST_BOOST_DOWN);
+  // } 
+  // else if (Velocity_Y() < -0.1) {
+  //   thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))) + THRUST_BOOST_UP);
+  // } 
+  // else {
+  //   thruster.set_thrust((G_ACCEL / (thruster.max_thrust_acceleration * cos(thrust_angle*PI/180.0))));
+  // }
+
 
   // function to control x-velocity
   // function to control y-velocity
@@ -318,7 +322,7 @@ void Lander_Control(void)
         I'll give you zero.
 **************************************************/
   if (!ARE_PIDS_INITIALIZED) {
-    initialize_pid(&x_pid, 5, 0, 10, 100); // TO CHECK: fine tune weights for x_pid here
+    initialize_pid(&x_pid, 1, 0, 2.5, 100); // TO CHECK: fine tune weights for x_pid here
     initialize_pid(&y_pid, 1, 1, 1, 10000); // TO CHECK: fine tune weights for y_pid here
     ARE_PIDS_INITIALIZED = true;
   }

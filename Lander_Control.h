@@ -2,7 +2,7 @@
 #define _LANDER_CONTROL_H
 
 // Simulation parameters - YOU MUST NOT CHANGE ANY OF THESE
-#define G_ACCEL 8.87
+#define G_ACCEL 7.8 //8.87
 #define MT_ACCEL 35.0
 #define RT_ACCEL 25.0
 #define LT_ACCEL 25.0
@@ -57,7 +57,7 @@ struct pid_context_struct {
   bool valid_current_proportion;
 };
 
-double ANGLE_OFFEST_LIMIT = 90; // how much the thruster can tilt away from the default position
+double ANGLE_OFFEST_LIMIT = 80; // how much the thruster can tilt away from the default position
 
 
 inline double boundAngle(double theta) {
